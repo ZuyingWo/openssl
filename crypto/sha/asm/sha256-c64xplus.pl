@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 2012-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 #
 # ====================================================================
 # Written by Andy Polyakov <appro@openssl.org> for the OpenSSL
@@ -38,6 +45,10 @@ open STDOUT,">$output";
 
 $code.=<<___;
 	.text
+
+	.if	.ASSEMBLER_VERSION<7000000
+	.asg	0,__TI_EABI__
+	.endif
 	.if	__TI_EABI__
 	.nocmp
 	.asg	sha256_block_data_order,_sha256_block_data_order
@@ -54,24 +65,25 @@ $code.=<<___;
 
 	.global	_sha256_block_data_order
 _sha256_block_data_order:
+__sha256_block:
 	.asmfunc stack_usage(64)
 	MV	$NUM,A0				; reassign $NUM
 ||	MVK	-64,B0
   [!A0]	BNOP	RA				; if ($NUM==0) return;
 || [A0]	STW	FP,*SP--[16]			; save frame pointer and alloca(64)
 || [A0]	MV	SP,FP
-   [A0]	ADDKPC	_sha256_block_data_order,B2
+   [A0]	ADDKPC	__sha256_block,B2
 || [A0]	AND	B0,SP,SP			; align stack at 64 bytes
 	.if	__TI_EABI__
    [A0]	MVK	0x00404,B1
-|| [A0]	MVKL	\$PCR_OFFSET(K256,_sha256_block_data_order),$K256
+|| [A0]	MVKL	\$PCR_OFFSET(K256,__sha256_block),$K256
    [A0]	MVKH	0x50000,B1
-|| [A0]	MVKH	\$PCR_OFFSET(K256,_sha256_block_data_order),$K256
+|| [A0]	MVKH	\$PCR_OFFSET(K256,__sha256_block),$K256
 	.else
    [A0]	MVK	0x00404,B1
-|| [A0]	MVKL	(K256-_sha256_block_data_order),$K256
+|| [A0]	MVKL	(K256-__sha256_block),$K256
    [A0]	MVKH	0x50000,B1
-|| [A0]	MVKH	(K256-_sha256_block_data_order),$K256
+|| [A0]	MVKH	(K256-__sha256_block),$K256
 	.endif
    [A0]	MVC	B1,AMR				; setup circular addressing
 || [A0]	MV	SP,$Xia

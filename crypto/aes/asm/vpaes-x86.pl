@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 2011-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 
 ######################################################################
 ## Constant-time SSSE3 AES core implementation.
@@ -30,6 +37,7 @@
 # Core 2(**)	28.1/41.4/18.3		21.9/25.2(***)
 # Nehalem	27.9/40.4/18.1		10.2/11.9
 # Atom		70.7/92.1/60.1		61.1/75.4(***)
+# Silvermont	45.4/62.9/24.1		49.2/61.1(***)
 #
 # (*)	"Hyper-threading" in the context refers rather to cache shared
 #	among multiple cores, than to specifically Intel HTT. As vast
@@ -49,6 +57,10 @@
 $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
 push(@INC,"${dir}","${dir}../../perlasm");
 require "x86asm.pl";
+
+$output = pop;
+open OUT,">$output";
+*STDOUT=*OUT;
 
 &asm_init($ARGV[0],"vpaes-x86.pl",$x86only = $ARGV[$#ARGV] eq "386");
 
@@ -900,3 +912,5 @@ $k_dsbo=0x2c0;		# decryption sbox final output
 &function_end("${PREFIX}_cbc_encrypt");
 
 &asm_finish();
+
+close STDOUT;

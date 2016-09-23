@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 2010-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 #
 # ====================================================================
 # Written by Andy Polyakov <appro@openssl.org> for the OpenSSL
@@ -59,11 +66,14 @@
 # longer. A CPU with higher pclmulqdq issue rate would also benefit
 # from higher aggregate factor...
 #
-# Westmere	1.76(+14%)
-# Sandy Bridge	1.79(+9%)
-# Ivy Bridge	1.79(+8%)
+# Westmere	1.78(+13%)
+# Sandy Bridge	1.80(+8%)
+# Ivy Bridge	1.80(+7%)
 # Haswell	0.55(+93%) (if system doesn't support AVX)
-# Bulldozer	1.52(+25%)
+# Broadwell	0.45(+110%)(if system doesn't support AVX)
+# Skylake	0.44(+110%)(if system doesn't support AVX)
+# Bulldozer	1.49(+27%)
+# Silvermont	2.88(+13%)
 
 # March 2013
 #
@@ -72,7 +82,8 @@
 # CPUs such as Sandy and Ivy Bridge can execute it, the code performs
 # sub-optimally in comparison to above mentioned version. But thanks
 # to Ilya Albrekht and Max Locktyukhin of Intel Corp. we knew that
-# it performs in 0.41 cycles per byte on Haswell processor.
+# it performs in 0.41 cycles per byte on Haswell processor, in
+# 0.29 on Broadwell, and in 0.36 on Skylake.
 #
 # [1] http://rt.openssl.org/Ticket/Display.html?id=2900&user=guest&pass=guest
 
@@ -89,7 +100,7 @@ die "can't locate x86_64-xlate.pl";
 
 if (`$ENV{CC} -Wa,-v -c -o /dev/null -x assembler /dev/null 2>&1`
 		=~ /GNU assembler version ([2-9]\.[0-9]+)/) {
-	$avx = ($1>=2.19) + ($1>=2.22);
+	$avx = ($1>=2.20) + ($1>=2.22);
 }
 
 if (!$avx && $win64 && ($flavour =~ /nasm/ || $ENV{ASM} =~ /nasm/) &&
@@ -102,7 +113,11 @@ if (!$avx && $win64 && ($flavour =~ /masm/ || $ENV{ASM} =~ /ml64/) &&
 	$avx = ($1>=10) + ($1>=11);
 }
 
-open OUT,"| \"$^X\" $xlate $flavour $output";
+if (!$avx && `$ENV{CC} -v 2>&1` =~ /((?:^clang|LLVM) version|.*based on LLVM) ([3-9]\.[0-9]+)/) {
+	$avx = ($2>=3.0) + ($2>3.0);
+}
+
+open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";
 *STDOUT=*OUT;
 
 $do4xaggr=1;
@@ -569,15 +584,15 @@ $code.=<<___ if (0 || (&reduction_alg9($Xhi,$Xi)&&0));
 	# experimental alternative. special thing about is that there
 	# no dependency between the two multiplications... 
 	mov		\$`0xE1<<1`,%eax
-	mov		\$0xA040608020C0E000,%r10	# ((7..0)·0xE0)&0xff
+	mov		\$0xA040608020C0E000,%r10	# ((7..0)Â·0xE0)&0xff
 	mov		\$0x07,%r11d
 	movq		%rax,$T1
 	movq		%r10,$T2
 	movq		%r11,$T3		# borrow $T3
 	pand		$Xi,$T3
-	pshufb		$T3,$T2			# ($Xi&7)·0xE0
+	pshufb		$T3,$T2			# ($Xi&7)Â·0xE0
 	movq		%rax,$T3
-	pclmulqdq	\$0x00,$Xi,$T1		# ·(0xE1<<1)
+	pclmulqdq	\$0x00,$Xi,$T1		# Â·(0xE1<<1)
 	pxor		$Xi,$T2
 	pslldq		\$15,$T2
 	paddd		$T2,$T2			# <<(64+56+1)
@@ -650,7 +665,7 @@ $code.=<<___;
 	je		.Lskip4x
 
 	sub		\$0x30,$len
-	mov		\$0xA040608020C0E000,%rax	# ((7..0)·0xE0)&0xff
+	mov		\$0xA040608020C0E000,%rax	# ((7..0)Â·0xE0)&0xff
 	movdqu		0x30($Htbl),$Hkey3
 	movdqu		0x40($Htbl),$Hkey4
 
@@ -673,8 +688,8 @@ $code.=<<___;
 	pxor		$Xl,$Xm
 	pclmulqdq	\$0x00,$Hkey2,$Xl
 	pclmulqdq	\$0x11,$Hkey2,$Xh
-	xorps		$Xl,$Xln
 	pclmulqdq	\$0x10,$HK,$Xm
+	xorps		$Xl,$Xln
 	xorps		$Xh,$Xhn
 	movups		0x50($Htbl),$HK
 	xorps		$Xm,$Xmn
@@ -692,8 +707,8 @@ $code.=<<___;
 	 pshufd		\$0b01001110,$Xi,$T1
 	 pxor		$Xi,$T1
 	pclmulqdq	\$0x11,$Hkey3,$Xh
-	xorps		$Xl,$Xln
 	pclmulqdq	\$0x00,$HK,$Xm
+	xorps		$Xl,$Xln
 	xorps		$Xh,$Xhn
 
 	lea	0x40($inp),$inp
@@ -711,23 +726,23 @@ $code.=<<___;
 	xorps		$Xln,$Xi
 	 movdqu		0x20($inp),$Xln
 	 movdqa		$Xl,$Xh
-	 pshufd		\$0b01001110,$Xl,$Xm
 	pclmulqdq	\$0x10,$HK,$T1
+	 pshufd		\$0b01001110,$Xl,$Xm
 	xorps		$Xhn,$Xhi
 	 pxor		$Xl,$Xm
 	 pshufb		$T3,$Xln
 	movups		0x20($Htbl),$HK
-	 pclmulqdq	\$0x00,$Hkey,$Xl
 	xorps		$Xmn,$T1
-	 movdqa		$Xln,$Xhn
+	 pclmulqdq	\$0x00,$Hkey,$Xl
 	 pshufd		\$0b01001110,$Xln,$Xmn
 
 	pxor		$Xi,$T1			# aggregated Karatsuba post-processing
-	 pxor		$Xln,$Xmn
+	 movdqa		$Xln,$Xhn
 	pxor		$Xhi,$T1		#
+	 pxor		$Xln,$Xmn
 	movdqa		$T1,$T2			#
-	pslldq		\$8,$T1
 	 pclmulqdq	\$0x11,$Hkey,$Xh
+	pslldq		\$8,$T1
 	psrldq		\$8,$T2			#
 	pxor		$T1,$Xi
 	movdqa		.L7_mask(%rip),$T1
@@ -736,8 +751,8 @@ $code.=<<___;
 
 	pand		$Xi,$T1			# 1st phase
 	pshufb		$T1,$T2			#
-	 pclmulqdq	\$0x00,$HK,$Xm
 	pxor		$Xi,$T2			#
+	 pclmulqdq	\$0x00,$HK,$Xm
 	psllq		\$57,$T2		#
 	movdqa		$T2,$T1			#
 	pslldq		\$8,$T2
@@ -764,21 +779,20 @@ $code.=<<___;
 	 movdqa		$Xl,$Xh
 	 pxor		$Xm,$Xmn
 	 pshufd		\$0b01001110,$Xl,$Xm
-	 pxor		$Xl,$Xm
-	 pclmulqdq	\$0x00,$Hkey3,$Xl
 	pxor		$T2,$Xi			#
 	pxor		$T1,$Xhi
+	 pxor		$Xl,$Xm
+	 pclmulqdq	\$0x00,$Hkey3,$Xl
 	psrlq		\$1,$Xi			#
+	pxor		$Xhi,$Xi		#
+	movdqa		$Xi,$Xhi
 	 pclmulqdq	\$0x11,$Hkey3,$Xh
 	 xorps		$Xl,$Xln
-	pxor		$Xhi,$Xi		#
+	pshufd		\$0b01001110,$Xi,$T1
+	pxor		$Xi,$T1
 
 	 pclmulqdq	\$0x00,$HK,$Xm
 	 xorps		$Xh,$Xhn
-
-	movdqa		$Xi,$Xhi
-	pshufd		\$0b01001110,$Xi,$T1
-	pxor		$Xi,$T1
 
 	lea	0x40($inp),$inp
 	sub	\$0x40,$len
@@ -786,10 +800,10 @@ $code.=<<___;
 
 .Ltail4x:
 	pclmulqdq	\$0x00,$Hkey4,$Xi
-	xorps		$Xm,$Xmn
 	pclmulqdq	\$0x11,$Hkey4,$Xhi
-	xorps		$Xln,$Xi
 	pclmulqdq	\$0x10,$HK,$T1
+	xorps		$Xm,$Xmn
+	xorps		$Xln,$Xi
 	xorps		$Xhn,$Xhi
 	pxor		$Xi,$Xhi		# aggregated Karatsuba post-processing
 	pxor		$Xmn,$T1
@@ -852,13 +866,13 @@ $code.=<<___;
 
 	pxor		$Xln,$Xi		# (H*Ii+1) + H^2*(Ii+Xi)
 	pxor		$Xhn,$Xhi
-	  movdqu	($inp),$Xhn		# Ii
+	  movdqu	($inp),$T2		# Ii
 	pxor		$Xi,$T1			# aggregated Karatsuba post-processing
-	  pshufb	$T3,$Xhn
+	  pshufb	$T3,$T2
 	  movdqu	16($inp),$Xln		# Ii+1
 
 	pxor		$Xhi,$T1
-	  pxor		$Xhn,$Xhi		# "Ii+Xi", consume early
+	  pxor		$T2,$Xhi		# "Ii+Xi", consume early
 	pxor		$T1,$Xmn
 	 pshufb		$T3,$Xln
 	movdqa		$Xmn,$T1		#
@@ -885,9 +899,9 @@ $code.=<<___;
 	  pxor		$T1,$Xhi		#
 	pxor		$Xhn,$Xmn		#
 
-	pclmulqdq	\$0x11,$Hkey,$Xhn	#######
 	  movdqa	$Xi,$T2			# 2nd phase
 	  psrlq		\$1,$Xi
+	pclmulqdq	\$0x11,$Hkey,$Xhn	#######
 	  pxor		$T2,$Xhi		#
 	  pxor		$Xi,$T2
 	  psrlq		\$5,$Xi
@@ -896,7 +910,6 @@ $code.=<<___;
 	  psrlq		\$1,$Xi			#
 	pclmulqdq	\$0x00,$HK,$Xmn		#######
 	  pxor		$Xhi,$Xi		#
-	  .byte		0x66,0x90
 
 	sub		\$0x20,$len
 	ja		.Lmod_loop

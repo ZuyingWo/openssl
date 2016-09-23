@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 1995-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 
 # require 'x86asm.pl';
 # &asm_init(<flavor>,"des-586.pl"[,$i386only]);
@@ -165,6 +172,11 @@ sub ::vprotd
     {	&::generic("vprotd",@_);	}
 }
 
+sub ::endbranch
+{
+    &::data_byte(0xf3,0x0f,0x1e,0xfb);
+}
+
 # label management
 $lbdecor="L";		# local label decoration, set by package
 $label="000";
@@ -255,6 +267,8 @@ sub ::asm_init
     $elf=$cpp=$coff=$aout=$macosx=$win32=$netware=$mwerks=$android=0;
     if    (($type eq "elf"))
     {	$elf=1;			require "x86gas.pl";	}
+    elsif (($type eq "elf-1"))
+    {	$elf=-1;		require "x86gas.pl";	}
     elsif (($type eq "a\.out"))
     {	$aout=1;		require "x86gas.pl";	}
     elsif (($type eq "coff" or $type eq "gaswin"))

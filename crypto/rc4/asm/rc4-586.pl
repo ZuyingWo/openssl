@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 1998-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 
 # ====================================================================
 # [Re]written by Andy Polyakov <appro@fy.chalmers.se> for the OpenSSL
@@ -44,7 +51,7 @@
 # Sandy Bridge	5.0/+8%
 # Atom		12.6/+6%
 # VIA Nano	6.4/+9%
-# Ivy Bridge	4.9/±0%
+# Ivy Bridge	4.9/Â±0%
 # Bulldozer	4.9/+15%
 #
 # (*)	PIII can actually deliver 6.6 cycles per byte with MMX code,
@@ -63,7 +70,10 @@ $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
 push(@INC,"${dir}","${dir}../../perlasm");
 require "x86asm.pl";
 
-&asm_init($ARGV[0],"rc4-586.pl");
+$output=pop;
+open STDOUT,">$output";
+
+&asm_init($ARGV[0],"rc4-586.pl",$x86only = $ARGV[$#ARGV] eq "386");
 
 $xx="eax";
 $yy="ebx";
@@ -147,7 +157,7 @@ if ($alt=0) {
 	&movd	($i>0?"mm1":"mm2",&DWP(0,$dat,$ty,4));
 
 	# (*)	This is the key to Core2 and Westmere performance.
-	#	Whithout movz out-of-order execution logic confuses
+	#	Without movz out-of-order execution logic confuses
 	#	itself and fails to reorder loads and stores. Problem
 	#	appears to be fixed in Sandy Bridge...
   }
@@ -187,8 +197,11 @@ if ($alt=0) {
 	&and	($ty,-4);		# how many 4-byte chunks?
 	&jz	(&label("loop1"));
 
-	&test	($ty,-8);
 	&mov	(&wparam(3),$out);	# $out as accumulator in these loops
+					if ($x86only) {
+	&jmp	(&label("go4loop4"));
+					} else {
+	&test	($ty,-8);
 	&jz	(&label("go4loop4"));
 
 	&picmeup($out,"OPENSSL_ia32cap_P");
@@ -231,6 +244,7 @@ if ($alt=0) {
 	&cmp	($inp,&wparam(1));	# compare to input+len
 	&je	(&label("done"));
 	&jmp	(&label("loop1"));
+					}
 
 &set_label("go4loop4",16);
 	&lea	($ty,&DWP(-4,$inp,$ty));
@@ -411,3 +425,4 @@ $idx="edx";
 
 &asm_finish();
 
+close STDOUT;

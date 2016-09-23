@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 2011-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 
 # ====================================================================
 # Written by Andy Polyakov <appro@openssl.org> for the OpenSSL
@@ -23,7 +30,7 @@ $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
 ( $xlate="${dir}../../crypto/perlasm/x86_64-xlate.pl" and -f $xlate) or
 die "can't locate x86_64-xlate.pl";
 
-open OUT,"| \"$^X\" $xlate $flavour $output";
+open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";
 *STDOUT=*OUT;
 
 $code=".text\n";
@@ -377,7 +384,7 @@ $code.=<<___				if ($mode eq "ctr32");
 .L${mode}_no_carry:
 ___
 $code.=<<___;
-	mov	%r8,$out		# restore paramters
+	mov	%r8,$out		# restore parameters
 	mov	%r11,$chunk
 	test	\$0x0f,$out
 	jz	.L${mode}_out_aligned
@@ -485,7 +492,7 @@ $code.=<<___				if ($mode eq "ctr32");
 	bswap	%eax
 	mov	%eax,-4($ctx)
 
-	mov	%r10,$len		# restore paramters
+	mov	%r10,$len		# restore parameters
 	sub	%r11,$len
 	mov	\$`16*0x10000`,$chunk
 	jz	.L${mode}_exit

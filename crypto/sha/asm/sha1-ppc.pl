@@ -1,4 +1,11 @@
-#!/usr/bin/env perl
+#! /usr/bin/env perl
+# Copyright 2006-2016 The OpenSSL Project Authors. All Rights Reserved.
+#
+# Licensed under the OpenSSL license (the "License").  You may not use
+# this file except in compliance with the License.  You can obtain a copy
+# in the file LICENSE in the source distribution or at
+# https://www.openssl.org/source/license.html
+
 
 # ====================================================================
 # Written by Andy Polyakov <appro@fy.chalmers.se> for the OpenSSL
@@ -37,7 +44,7 @@ if ($flavour =~ /64/) {
 	$PUSH	="stw";
 } else { die "nonsense $flavour"; }
 
-# Define endianess based on flavour
+# Define endianness based on flavour
 # i.e.: linux64le
 $LITTLE_ENDIAN = ($flavour=~/le$/) ? $SIZE_T : 0;
 
@@ -125,31 +132,31 @@ my ($i,$a,$b,$c,$d,$e,$f)=@_;
 my $j=$i+1;
 $code.=<<___ if ($i<79);
 	add	$f,$K,$e
+	xor	$t0,$b,$d
 	rotlwi	$e,$a,5
 	xor	@X[$j%16],@X[$j%16],@X[($j+2)%16]
 	add	$f,$f,@X[$i%16]
-	xor	$t0,$b,$c
+	xor	$t0,$t0,$c
 	xor	@X[$j%16],@X[$j%16],@X[($j+8)%16]
-	add	$f,$f,$e
-	rotlwi	$b,$b,30
-	xor	$t0,$t0,$d
-	xor	@X[$j%16],@X[$j%16],@X[($j+13)%16]
 	add	$f,$f,$t0
+	rotlwi	$b,$b,30
+	xor	@X[$j%16],@X[$j%16],@X[($j+13)%16]
+	add	$f,$f,$e
 	rotlwi	@X[$j%16],@X[$j%16],1
 ___
 $code.=<<___ if ($i==79);
 	add	$f,$K,$e
+	xor	$t0,$b,$d
 	rotlwi	$e,$a,5
 	lwz	r16,0($ctx)
 	add	$f,$f,@X[$i%16]
-	xor	$t0,$b,$c
+	xor	$t0,$t0,$c
 	lwz	r17,4($ctx)
-	add	$f,$f,$e
+	add	$f,$f,$t0
 	rotlwi	$b,$b,30
 	lwz	r18,8($ctx)
-	xor	$t0,$t0,$d
 	lwz	r19,12($ctx)
-	add	$f,$f,$t0
+	add	$f,$f,$e
 	lwz	r20,16($ctx)
 ___
 }
@@ -227,7 +234,7 @@ Lunaligned:
 	srwi.	$t1,$t1,6	; t1/=64
 	beq	Lcross_page
 	$UCMP	$num,$t1
-	ble-	Laligned	; didn't cross the page boundary
+	ble	Laligned	; didn't cross the page boundary
 	mtctr	$t1
 	subfc	$num,$t1,$num
 	bl	Lsha1_block_private
@@ -255,7 +262,7 @@ Lmemcpy:
 	bl	Lsha1_block_private
 	$POP	$inp,`$FRAME-$SIZE_T*18`($sp)
 	addic.	$num,$num,-1
-	bne-	Lunaligned
+	bne	Lunaligned
 
 Ldone:
 	$POP	r0,`$FRAME+$LRSAVE`($sp)
@@ -329,7 +336,7 @@ $code.=<<___;
 	stw	r20,16($ctx)
 	mr	$E,r20
 	addi	$inp,$inp,`16*4`
-	bdnz-	Lsha1_block_private
+	bdnz	Lsha1_block_private
 	blr
 	.long	0
 	.byte	0,12,0x14,0,0,0,0,0
